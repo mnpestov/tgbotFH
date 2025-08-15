@@ -1,6 +1,9 @@
 const { mainMenu } = require('./keyboards');
 const { Markup } = require('telegraf');
-const { TARIFFS, formatRub, buildDemoSbpPayload, makeQrPngBuffer } = require('../services/payment');
+const { TARIFFS, formatRub } = require('../services/payment');
+const provider = require('../services/providers/sbpMock');
+const { createOrder } = require('../services/orderService');
+const logger = require('../shared/logger');
 
 function registerCommands(bot) {
   bot.command('menu', (ctx) => ctx.reply('Выберите тариф:', mainMenu()));
@@ -63,15 +66,52 @@ function registerCommands(bot) {
   });
 
   // 3) На "Оплатить + <сумма>" показываем QR (демо SBP)
+  // bot.action('PAY_BASIC_STEP2', async (ctx) => {
+  //   await ctx.answerCbQuery();
+  //   const t = TARIFFS.BASIC;
+  //   const orderId = `ORD-${Date.now()}`;
+  //   const payload = buildDemoSbpPayload({ orderId, tariff: t });
+  //   const png = await makeQrPngBuffer(payload);
+
+  //   await ctx.replyWithPhoto({ source: png }, {
+  //     caption: `🔗 Демо‑QR для оплаты по СБП\nЗаказ: *${orderId}*\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\n*ВНИМАНИЕ:* это демонстрационный QR. Для реальной оплаты интегрируемся с банком/эквайером СБП.`,
+  //     parse_mode: 'Markdown'
+  //   });
+  // });
+
+  // bot.action('PAY_PRO_STEP2', async (ctx) => {
+  //   await ctx.answerCbQuery();
+  //   const t = TARIFFS.PRO;
+  //   const orderId = `ORD-${Date.now()}`;
+  //   const payload = buildDemoSbpPayload({ orderId, tariff: t });
+  //   const png = await makeQrPngBuffer(payload);
+
+  //   await ctx.replyWithPhoto({ source: png }, {
+  //     caption: `🔗 Демо‑QR для оплаты по СБП\nЗаказ: *${orderId}*\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\n*ВНИМАНИЕ:* это демонстрационный QR. Для реальной оплаты интегрируемся с банком/эквайером СБП.`,
+  //     parse_mode: 'Markdown'
+  //   });
+  // });
+
   bot.action('PAY_BASIC_STEP2', async (ctx) => {
     await ctx.answerCbQuery();
     const t = TARIFFS.BASIC;
-    const orderId = `ORD-${Date.now()}`;
-    const payload = buildDemoSbpPayload({ orderId, tariff: t });
-    const png = await makeQrPngBuffer(payload);
 
-    await ctx.replyWithPhoto({ source: png }, {
-      caption: `🔗 Демо‑QR для оплаты по СБП\nЗаказ: *${orderId}*\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\n*ВНИМАНИЕ:* это демонстрационный QR. Для реальной оплаты интегрируемся с банком/эквайером СБП.`,
+    // 1) Создаём инвойс у провайдера (получаем providerOrderId и QR)
+    const { providerOrderId, qrPng } = await provider.createInvoice({ tariffCode: t.code, amountKopecks: t.amount });
+    logger.info({ providerOrderId, tariff: t.code, user: ctx.from.id }, 'invoice created');
+
+    // 2) Сохраняем заказ
+    await createOrder({
+      tgUserId: ctx.from.id.toString(),
+      tariffCode: t.code,
+      amountKopecks: t.amount,
+      provider: process.env.PROVIDER_NAME || 'sbpMock',
+      providerOrderId
+    });
+
+    // 3) Отправляем QR пользователю
+    await ctx.replyWithPhoto({ source: qrPng }, {
+      caption: `🔗 QR для оплаты по СБП\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\nПосле оплаты статус обновится автоматически.`,
       parse_mode: 'Markdown'
     });
   });
@@ -79,12 +119,19 @@ function registerCommands(bot) {
   bot.action('PAY_PRO_STEP2', async (ctx) => {
     await ctx.answerCbQuery();
     const t = TARIFFS.PRO;
-    const orderId = `ORD-${Date.now()}`;
-    const payload = buildDemoSbpPayload({ orderId, tariff: t });
-    const png = await makeQrPngBuffer(payload);
 
-    await ctx.replyWithPhoto({ source: png }, {
-      caption: `🔗 Демо‑QR для оплаты по СБП\nЗаказ: *${orderId}*\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\n*ВНИМАНИЕ:* это демонстрационный QR. Для реальной оплаты интегрируемся с банком/эквайером СБП.`,
+    const { providerOrderId, qrPng } = await provider.createInvoice({ tariffCode: t.code, amountKopecks: t.amount });
+
+    await createOrder({
+      tgUserId: ctx.from.id.toString(),
+      tariffCode: t.code,
+      amountKopecks: t.amount,
+      provider: process.env.PROVIDER_NAME || 'sbpMock',
+      providerOrderId
+    });
+
+    await ctx.replyWithPhoto({ source: qrPng }, {
+      caption: `🔗 QR для оплаты по СБП\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\nПосле оплаты статус обновится автоматически.`,
       parse_mode: 'Markdown'
     });
   });

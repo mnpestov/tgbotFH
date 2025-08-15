@@ -22,3 +22,24 @@ model Note {
   text      String
   createdAt DateTime @default(now())
 }
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+model Order {
+  id               Int          @id @default(autoincrement())
+  tgUserId         String
+  chatId           String
+  tariffCode       String
+  amountKopecks    Int
+  status           OrderStatus  @default(PENDING)
+  provider         String
+  providerOrderId  String?      @unique
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
