@@ -94,46 +94,54 @@ function registerCommands(bot) {
 
   bot.action('PAY_BASIC_STEP2', async (ctx) => {
     await ctx.answerCbQuery();
-    const t = TARIFFS.BASIC;
+    try {
+      const t = TARIFFS.BASIC;
+      const { providerOrderId, qrPng } = await provider.createInvoice({ tariffCode: t.code, amountKopecks: t.amount });
+      logger.info({ providerOrderId, tariff: t.code, user: ctx.from.id }, 'invoice created');
 
-    // 1) Создаём инвойс у провайдера (получаем providerOrderId и QR)
-    const { providerOrderId, qrPng } = await provider.createInvoice({ tariffCode: t.code, amountKopecks: t.amount });
-    logger.info({ providerOrderId, tariff: t.code, user: ctx.from.id }, 'invoice created');
+      await createOrder({
+        tgUserId: ctx.from.id.toString(),
+        chatId: ctx.chat.id.toString(),             // 👈 сохраняем chatId
+        tariffCode: t.code,
+        amountKopecks: t.amount,
+        provider: process.env.PROVIDER_NAME || 'sbpMock',
+        providerOrderId
+      });
 
-    // 2) Сохраняем заказ
-    await createOrder({
-      tgUserId: ctx.from.id.toString(),
-      tariffCode: t.code,
-      amountKopecks: t.amount,
-      provider: process.env.PROVIDER_NAME || 'sbpMock',
-      providerOrderId
-    });
-
-    // 3) Отправляем QR пользователю
-    await ctx.replyWithPhoto({ source: qrPng }, {
-      caption: `🔗 QR для оплаты по СБП\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\nПосле оплаты статус обновится автоматически.`,
-      parse_mode: 'Markdown'
-    });
+      await ctx.replyWithPhoto({ source: qrPng }, {
+        caption: `🔗 QR для оплаты по СБП\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\nПосле оплаты статус обновится автоматически.`,
+        parse_mode: 'Markdown'
+      });
+    } catch (err) {
+      console.error('PAY_BASIC_STEP2 error:', err);
+      await ctx.reply('Ошибка при подготовке оплаты. Попробуйте ещё раз.');
+    }
   });
 
   bot.action('PAY_PRO_STEP2', async (ctx) => {
     await ctx.answerCbQuery();
-    const t = TARIFFS.PRO;
+    try {
+      const t = TARIFFS.PRO;
+      const { providerOrderId, qrPng } = await provider.createInvoice({ tariffCode: t.code, amountKopecks: t.amount });
+      logger.info({ providerOrderId, tariff: t.code, user: ctx.from.id }, 'invoice created');
 
-    const { providerOrderId, qrPng } = await provider.createInvoice({ tariffCode: t.code, amountKopecks: t.amount });
+      await createOrder({
+        tgUserId: ctx.from.id.toString(),
+        chatId: ctx.chat.id.toString(),             // 👈 сохраняем chatId
+        tariffCode: t.code,
+        amountKopecks: t.amount,
+        provider: process.env.PROVIDER_NAME || 'sbpMock',
+        providerOrderId
+      });
 
-    await createOrder({
-      tgUserId: ctx.from.id.toString(),
-      tariffCode: t.code,
-      amountKopecks: t.amount,
-      provider: process.env.PROVIDER_NAME || 'sbpMock',
-      providerOrderId
-    });
-
-    await ctx.replyWithPhoto({ source: qrPng }, {
-      caption: `🔗 QR для оплаты по СБП\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\nПосле оплаты статус обновится автоматически.`,
-      parse_mode: 'Markdown'
-    });
+      await ctx.replyWithPhoto({ source: qrPng }, {
+        caption: `🔗 QR для оплаты по СБП\nТариф: *${t.title}*\nСумма: *${formatRub(t.amount)}*\n\nПосле оплаты статус обновится автоматически.`,
+        parse_mode: 'Markdown'
+      });
+    } catch (err) {
+      console.error('PAY_PRO_STEP2 error:', err);
+      await ctx.reply('Ошибка при подготовке оплаты. Попробуйте ещё раз.');
+    }
   });
 }
 
